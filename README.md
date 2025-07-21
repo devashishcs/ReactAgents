@@ -12,3 +12,13 @@ and then invoke the LLM with a question that can be answered using the tools
 agents are more powerful when the task is complex and requires multiple steps or reasoning
 in this case, you can use the create_react_agent function to create an agent that
 can use the tools to answer the question
+
+
+query = "what are all the coloumns in the dataset?" \
+    "Group the dataset by PoNumber and return the result in JSON format"
+    Show total sales for each SkuCode.
+
+
+     "what are all the coloumns in the dataset?" \
+    "Show total sales for each SkuCode nd then generate a brief summary of the data." \
+    "Plot the graph showing  SKUs by sales."
