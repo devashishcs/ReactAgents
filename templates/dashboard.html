@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Futuristic Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Orbitron', sans-serif;
+      background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+      color: #00ffe5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .section {
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: rgba(0, 255, 229, 0.1);
+      border: 1px solid #00ffe5;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 0 20px #00ffe5;
+      backdrop-filter: blur(10px);
+      margin-bottom: 20px;
+    }
+    canvas {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+    }
+    h1 {
+      text-shadow: 0 0 10px #00ffe5;
+      margin-bottom: 30px;
+    }
+    input[type="file"], input[type="text"] {
+      background: #111;
+      color: #00ffe5;
+      border: 1px solid #00ffe5;
+      padding: 8px;
+      margin: 10px 0;
+      border-radius: 8px;
+      width: 100%;
+    }
+    button {
+      background: #00ffe5;
+      color: #000;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    #dataTable, #columnList {
+      background-color: rgba(255, 255, 255, 0.05);
+      color: #00ffe5;
+      border-radius: 12px;
+      padding: 10px;
+      overflow-x: auto;
+      white-space: nowrap;
+      margin-top: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #00ffe5;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: rgba(0, 255, 229, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 Futuristic Dashboard</h1>
+
+  <div class="section">
+    <div class="card">
+      <h3>🧠 Bar Chart (Interactive)</h3>
+      <input type="text" id="queryInput" placeholder="Type query to filter...">
+      <button onclick="updateBarChart()">Update Chart</button>
+      <canvas id="barChart"></canvas>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="card">
+      <h3>📋 Column Names</h3>
+      <div id="columnList">Product, Sales, Region</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="card">
+      <h3>📊 Data Table</h3>
+      <div id="dataTable">
+        <table>
+          <thead>
+            <tr><th>Product</th><th>Sales</th><th>Region</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Alpha</td><td>120</td><td>North</td></tr>
+            <tr><td>Beta</td><td>90</td><td>South</td></tr>
+            <tr><td>Gamma</td><td>75</td><td>East</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="card">
+      <h3>📄 Upload Document</h3>
+      <input type="file" id="fileUpload">
+    </div>
+  </div>
+
+  <script>
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    let barChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Alpha', 'Beta', 'Gamma'],
+        datasets: [{
+          label: 'Sales',
+          data: [120, 90, 75],
+          backgroundColor: ['#00ffe5', '#009999', '#33cccc'],
+          borderColor: '#0f2027',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        plugins: { legend: { labels: { color: '#00ffe5' } } },
+        scales: {
+          x: { ticks: { color: '#00ffe5' } },
+          y: { ticks: { color: '#00ffe5' } },
+        }
+      }
+    });
+
+    function updateBarChart() {
+      const query = document.getElementById('queryInput').value.toLowerCase();
+      let newData;
+
+      if (query.includes("north")) {
+        newData = [100, 60, 40];
+      } else if (query.includes("south")) {
+        newData = [50, 100, 20];
+      } else {
+        newData = [120, 90, 75];
+      }
+
+      barChart.data.datasets[0].data = newData;
+      barChart.update();
+    }
+  </script>
+</body>
+</html>
