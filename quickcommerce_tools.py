@@ -9,8 +9,8 @@ df = pd.read_excel("imp_docs/quickcommerce.xlsx", sheet_name=None)  # 0 means th
 
 @tool
 def get_columns() -> list:
-    """Return a list of column names from the first Excel sheet."""
-    return df.columns.tolist()
+    """Return a list of column names from  Excel sheet as JSON format."""
+    return {sheet: list(sheet_df.columns) for sheet, sheet_df in df.items()}
 
 @tool
 def group_by_po_number() -> dict:
@@ -82,9 +82,9 @@ def group_by_city_code() -> dict:
     return result
 
 @tool
-def total_sales_by_sku() -> str:
+def total_sales_by_sku() -> list[dict]:
     """
-    Groups data by 'SkuCode' and returns total sales per SKU as JSON string.
+    Groups data by 'SkuCode' and returns total sales per SKU as a list of dictionaries.
     Handles multiple sheets with different column names (SkuCode/SKU, PoLineValueWithTax/Total Amount).
     """
     all_results = {}
@@ -110,8 +110,39 @@ def total_sales_by_sku() -> str:
     # Convert to list of dictionaries format
     result_list = [{"SKU": sku, "AMOUNT": total} 
                    for sku, total in all_results.items()]
+    return result_list
+
+@tool
+def total_sales_by_po() -> list[dict]:
+    """
+    Groups data by 'PoNumber' and returns total sales per PoNumber as a list of dictionaries.
+    Handles multiple sheets with different column names (PO No./PoNumber, PoLineValueWithTax/Total Amount).
+    """
+    all_results = {}
     
-    return json.dumps(result_list)
+    for sheet_name, sheet_df in df.items():
+        # Determine column names for this sheet
+        po_col = "PoNumber" if "PoNumber" in sheet_df.columns else "PO No."
+        amount_col = "PoLineValueWithTax" if "PoLineValueWithTax" in sheet_df.columns else "Total Amount"
+        
+        # Group by SKU for this sheet
+        grouped = sheet_df.groupby(po_col)[amount_col].sum().reset_index()
+        
+        # Add sheet results to overall results
+        for _, row in grouped.iterrows():
+            po_code = row[po_col]
+            value = row[amount_col]
+            
+            if po_code in all_results:
+                all_results[po_code] += value
+            else:
+                all_results[po_code] = value
+    
+    # Convert to list of dictionaries format
+    result_list = [{"PO": po, "AMOUNT": total} 
+                   for po, total in all_results.items()]
+    return result_list
+
 
 @tool
 def plot_sales_by_sku(data: str) -> str:

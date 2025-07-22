@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Futuristic Dashboard</title>
+  <title>QuickCommerce Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -87,13 +87,13 @@
   </style>
 </head>
 <body>
-  <h1>🚀 Futuristic Dashboard</h1>
+  <h1>🚀 Quick Commerce Dashboard</h1>
 
   <div class="section">
     <div class="card">
-      <h3>🧠 Bar Chart (Interactive)</h3>
+      <h3>🧠 Bar Chart </h3>
       <input type="text" id="queryInput" placeholder="Type query to filter...">
-      <button onclick="updateBarChart()">Update Chart</button>
+      <button onclick="updateBarChart()">Generate</button>
       <canvas id="barChart"></canvas>
     </div>
   </div>
@@ -131,43 +131,73 @@
   </div>
 
   <script>
-    const barCtx = document.getElementById('barChart').getContext('2d');
-    let barChart = new Chart(barCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Alpha', 'Beta', 'Gamma'],
-        datasets: [{
-          label: 'Sales',
-          data: [120, 90, 75],
-          backgroundColor: ['#00ffe5', '#009999', '#33cccc'],
-          borderColor: '#0f2027',
-          borderWidth: 2
-        }]
+  const barCtx = document.getElementById('barChart').getContext('2d');
+  let barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: [],  // initially empty
+      datasets: [{
+        label: 'Sales',
+        data: [],
+        backgroundColor: '#00ffe5',
+        borderColor: '#0f2027',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      plugins: {
+        legend: {
+          labels: { color: '#00ffe5' }
+        }
       },
-      options: {
-        plugins: { legend: { labels: { color: '#00ffe5' } } },
-        scales: {
-          x: { ticks: { color: '#00ffe5' } },
-          y: { ticks: { color: '#00ffe5' } },
+      scales: {
+        x: {
+          ticks: { color: '#00ffe5' }
+        },
+        y: {
+          ticks: { color: '#00ffe5' }
         }
       }
-    });
-
-    function updateBarChart() {
-      const query = document.getElementById('queryInput').value.toLowerCase();
-      let newData;
-
-      if (query.includes("north")) {
-        newData = [100, 60, 40];
-      } else if (query.includes("south")) {
-        newData = [50, 100, 20];
-      } else {
-        newData = [120, 90, 75];
-      }
-
-      barChart.data.datasets[0].data = newData;
-      barChart.update();
     }
-  </script>
+  });
+
+  function updateBarChart() {
+    const query = document.getElementById('queryInput').value;
+
+    fetch('/get-chart-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query: query })
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Received data:', data);
+      // If data.values exists and is an array, use it
+      let chartData = Array.isArray(data.values) ? data.values : [];
+      if (chartData.length > 0) {
+        const keys = chartData.length > 0 ? Object.keys(chartData[0]) : [];
+
+        const xKey = keys[1];
+        const yKey = keys[0]; 
+
+        // Map dynamically
+        const labels = chartData.map(item => item[xKey]);
+        const amounts = chartData.map(item => item[yKey]);
+        
+
+        barChart.data.labels = labels;
+        barChart.data.datasets[0].data = amounts;
+        barChart.update();
+      } else {
+        barChart.data.labels = [];
+        barChart.data.datasets[0].data = [];
+        barChart.update();
+        console.error('Data received is not an array:', data);
+      }
+    });
+  }
+</script>
 </body>
 </html>
