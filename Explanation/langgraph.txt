@@ -1,0 +1,166 @@
+# LangGraph Multi-Step Reasoning Engine Explained
+
+## What is LangGraph?
+LangGraph is a framework for building **stateful, multi-step AI applications**. Think of it as a way to create AI agents that can:
+- Think step by step
+- Use tools when needed
+- Remember what happened in previous steps
+- Make decisions about what to do next
+
+## Overview of Your Code Structure
+
+Your code has 3 main files that work together:
+
+### 1. **react.py** - The Foundation
+This file sets up the basic components:
+
+```python
+# Creates two simple tools
+@tool
+def triple(x: int) -> int:
+    """Triple the input value."""
+    return x * 3
+
+@tool  
+def square(x: int) -> int:
+    """Square the input value."""
+    return x * x
+
+# Sets up the AI model with access to these tools
+llm = ChatGroq(...).bind_tools(tools)
+```
+
+**What this does:**
+- Defines two mathematical tools (triple and square)
+- Creates an AI model (using Groq's Llama) that knows about these tools
+- The `.bind_tools()` tells the AI "you can use these tools when needed"
+
+### 2. **nodes.py** - The Brain Functions
+This file contains the "thinking" parts of your agent:
+
+```python
+def run_agent_reasoning(state: MessagesState) -> MessagesState:
+    """Run the agent reasoning step.""" 
+    response = llm.invoke([system_message, state["messages"]])
+    return {"messages": [response]}
+
+tool_node = ToolNode(tools)
+```
+
+**What this does:**
+- `run_agent_reasoning`: The AI looks at the conversation and decides what to do next
+- `tool_node`: Actually executes tools when the AI decides to use them
+
+### 3. **main.py** - The Control Flow
+This is where the magic happens - it defines HOW your agent works:
+
+## The Flow Step-by-Step
+
+### Step 1: Setup the Graph Structure
+```python
+flow = StateGraph(MessagesState)
+```
+Creates a graph where each "state" contains the conversation messages.
+
+### Step 2: Add the Two Main Nodes
+```python
+flow.add_node(AGENT_REASON, run_agent_reasoning)  # Thinking node
+flow.add_node(ACT, tool_node)                     # Action node
+```
+
+Your agent has two main abilities:
+- **AGENT_REASON**: Think and decide what to do
+- **ACT**: Use tools to perform actions
+
+### Step 3: Define the Decision Logic
+```python
+def should_continue(state: MessagesState) -> str:
+    """Decide whether to continue with tools or end"""
+    messages = state["messages"]
+    if not messages or not hasattr(messages[LAST], 'tool_calls') or not messages[LAST].tool_calls:
+        return END
+    return ACT
+```
+
+This function asks: "Did the AI just decide to use a tool?"
+- **If YES**: Go to ACT (use the tool)
+- **If NO**: END (give final answer)
+
+### Step 4: Connect Everything Together
+```python
+flow.set_entry_point(AGENT_REASON)  # Always start by thinking
+
+flow.add_conditional_edges(
+    AGENT_REASON,      # From the thinking node
+    should_continue,   # Use this function to decide
+    {END: END, ACT: ACT}  # Possible destinations
+)
+
+flow.add_edge(ACT, AGENT_REASON)  # After using a tool, think again
+```
+
+## How It All Works Together
+
+Here's what happens when you ask a question:
+
+### Example: "What is 5 tripled and then squared?"
+
+1. **START** → **AGENT_REASON**
+   - AI thinks: "I need to triple 5 first, then square the result"
+   - AI decides: "I'll use the triple tool with input 5"
+
+2. **AGENT_REASON** → **ACT** (because AI wants to use a tool)
+   - Tool executes: `triple(5)` → returns 15
+   - State now contains: "User asked about 5 tripled and squared. I used triple(5) and got 15."
+
+3. **ACT** → **AGENT_REASON** (always go back to thinking after using a tool)
+   - AI thinks: "Now I have 15, I need to square it"
+   - AI decides: "I'll use the square tool with input 15"
+
+4. **AGENT_REASON** → **ACT** (because AI wants to use another tool)
+   - Tool executes: `square(15)` → returns 225
+   - State now contains: "I tripled 5 to get 15, then squared 15 to get 225."
+
+5. **ACT** → **AGENT_REASON** (back to thinking)
+   - AI thinks: "I have the final answer: 225"
+   - AI decides: "No more tools needed, I'll give the final answer"
+
+6. **AGENT_REASON** → **END** (because no more tools needed)
+   - AI responds: "The answer is 225"
+
+## Key Concepts Explained
+
+### MessagesState
+- Think of this as the "memory" of your conversation
+- It keeps track of all messages between you and the AI
+- Each step can read from and add to this memory
+
+### Nodes vs Edges
+- **Nodes**: The "doing" parts (thinking, using tools)
+- **Edges**: The "flow" between nodes (what happens next?)
+
+### Conditional Edges
+- These make decisions about where to go next
+- Like an "if-then" statement in the flow
+
+### Why This Pattern is Powerful
+1. **Reliability**: The AI can break complex problems into steps
+2. **Transparency**: You can see each step the AI takes
+3. **Extensibility**: Easy to add more tools or decision points
+4. **Error Handling**: If a tool fails, the AI can try something else
+
+## Common Beginner Questions
+
+**Q: Why not just ask the AI to use tools directly?**
+A: This structured approach ensures the AI thinks before acting and can handle multi-step problems reliably.
+
+**Q: What if I want to add more tools?**
+A: Just add them to the `tools` list in `react.py` - the rest of the code automatically adapts!
+
+**Q: Can the AI use multiple tools in one step?**
+A: No, this pattern uses one tool at a time, but that makes it more predictable and easier to debug.
+
+**Q: What happens if something goes wrong?**
+A: The AI will get an error message and can decide how to handle it in the next reasoning step.
+
+This architecture gives you a robust foundation for building more complex AI agents that can solve multi-step problems reliably!
