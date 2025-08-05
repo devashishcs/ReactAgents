@@ -10,7 +10,7 @@ load_dotenv()
 # Constants
 AGENT_REASON = "agent_reasoning"
 ACT = "act"
-LAST = -1
+LAST = -1 #Look at the most recent message
 
 def should_continue(state: MessagesState) -> str:
     """Decide whether to continue with tools or end"""
@@ -51,10 +51,12 @@ if __name__ == "__main__":
     print("This is a simple tool demo.")
     
     # Example usage (uncomment to test):
-    # try:
-    #     result = app.invoke({
-    #         "messages": [HumanMessage(content="Hello, what tools do you have?")]
-    #     })
-    #     print("Result:", result)
-    # except Exception as e:
-    #     print(f"Error running app: {e}")
+    try:
+        result = app.invoke({
+            "messages": [HumanMessage(content="Whats the weather in tokyo?")]
+        })
+        #                 ↑
+        #    This dictionary IS the initial state!
+        print("Result:", result)
+    except Exception as e:
+        print(f"Error running app: {e}")

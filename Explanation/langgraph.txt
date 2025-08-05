@@ -1,7 +1,8 @@
 # LangGraph Multi-Step Reasoning Engine Explained
 
 ## What is LangGraph?
-LangGraph is a framework for building **stateful, multi-step AI applications**. Think of it as a way to create AI agents that can:
+LangGraph is a framework for building **stateful, multi-step AI applications**. 
+Think of it as a way to create AI agents that can:
 - Think step by step
 - Use tools when needed
 - Remember what happened in previous steps

@@ -11,7 +11,9 @@ SYSTEM_MESSAGE = """You are a helpful assistant that can use tools to answer the
 
 def run_agent_reasoning(state: MessagesState) -> MessagesState:
     """Run the agent reasoning step."""
-    response = llm.invoke([{"role": "system", "content": SYSTEM_MESSAGE},state["messages"]])
+    response = llm.invoke([
+        {"role": "system", "content": SYSTEM_MESSAGE}
+    ] + state["messages"])  # ✅ Use + to combine lists properly
     return {"messages": [response]}
 
 tool_node = ToolNode(tools)
