@@ -2,7 +2,9 @@ import re
 import json
 from typing import TypedDict, List, Optional, Dict, Any
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_openai import ChatOpenAI  # or your preferred LLM
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 import asyncio
 
 # State definition
@@ -16,158 +18,101 @@ class ChatbotState(TypedDict):
     conversation_stage: str
     last_response: str
 
-# Mock insurance database - replace with your actual documents
+# Insurance Database (same as before)
 INSURANCE_DATABASE = {
     "health": {
-        "18-25": {
-            "premium": "$150-200/month",
-            "coverage": "Basic health coverage, preventive care, emergency services",
-            "deductible": "$1,500",
-            "benefits": ["Doctor visits", "Prescription coverage", "Emergency care"]
-        },
-        "26-35": {
-            "premium": "$180-250/month",
-            "coverage": "Comprehensive health coverage with maternity benefits",
-            "deductible": "$1,200",
-            "benefits": ["Doctor visits", "Prescription coverage", "Maternity care", "Specialist visits"]
-        },
-        "36-50": {
-            "premium": "$220-300/month",
-            "coverage": "Enhanced coverage with preventive screenings",
-            "deductible": "$1,000",
-            "benefits": ["Doctor visits", "Prescription coverage", "Preventive screenings", "Chronic disease management"]
-        },
-        "51-65": {
-            "premium": "$280-400/month",
-            "coverage": "Premium coverage with comprehensive benefits",
-            "deductible": "$800",
-            "benefits": ["Doctor visits", "Prescription coverage", "Specialist care", "Advanced diagnostics"]
-        }
+        "18-25": {"premium": "$150-200/month", "coverage": "Basic health coverage", "deductible": "$1,500"},
+        "26-35": {"premium": "$180-250/month", "coverage": "Comprehensive health coverage", "deductible": "$1,200"},
+        "36-50": {"premium": "$220-300/month", "coverage": "Enhanced coverage", "deductible": "$1,000"},
+        "51-65": {"premium": "$280-400/month", "coverage": "Premium coverage", "deductible": "$800"}
     },
     "life": {
-        "18-30": {
-            "premium": "$20-40/month",
-            "coverage": "$250,000-500,000",
-            "type": "Term life insurance",
-            "benefits": ["Death benefit", "Accidental death coverage"]
-        },
-        "31-45": {
-            "premium": "$35-70/month",
-            "coverage": "$300,000-750,000",
-            "type": "Term or whole life insurance",
-            "benefits": ["Death benefit", "Cash value (whole life)", "Loan options"]
-        },
-        "46-60": {
-            "premium": "$80-150/month",
-            "coverage": "$200,000-500,000",
-            "type": "Whole life or universal life",
-            "benefits": ["Death benefit", "Investment component", "Tax advantages"]
-        }
+        "18-30": {"premium": "$20-40/month", "coverage": "$250,000-500,000", "type": "Term life"},
+        "31-45": {"premium": "$35-70/month", "coverage": "$300,000-750,000", "type": "Term/Whole life"},
+        "46-60": {"premium": "$80-150/month", "coverage": "$200,000-500,000", "type": "Whole/Universal life"}
     },
     "auto": {
-        "18-25": {
-            "premium": "$120-200/month",
-            "coverage": "Liability + Comprehensive",
-            "deductible": "$500-1000",
-            "benefits": ["Liability coverage", "Collision", "Comprehensive", "Uninsured motorist"]
-        },
-        "26-40": {
-            "premium": "$90-150/month",
-            "coverage": "Full coverage with lower rates",
-            "deductible": "$250-750",
-            "benefits": ["Liability coverage", "Collision", "Comprehensive", "Rental car coverage"]
-        },
-        "41-65": {
-            "premium": "$80-130/month",
-            "coverage": "Mature driver discounts available",
-            "deductible": "$250-500",
-            "benefits": ["Liability coverage", "Collision", "Comprehensive", "Good driver discounts"]
-        }
+        "18-25": {"premium": "$120-200/month", "coverage": "Liability + Comprehensive", "deductible": "$500-1000"},
+        "26-40": {"premium": "$90-150/month", "coverage": "Full coverage", "deductible": "$250-750"},
+        "41-65": {"premium": "$80-130/month", "coverage": "Mature driver rates", "deductible": "$250-500"}
     }
 }
 
-class InsuranceChatbot:
-    def __init__(self):
+class InsuranceChatbotWithLLM:
+    def __init__(self, llm_api_key: str = None):
+        # Initialize LLM - replace with your preferred model
+        self.llm = ChatOpenAI(
+            model="gpt-3.5-turbo", 
+            api_key=llm_api_key,
+            temperature=0.7
+        )
         self.graph = self._build_graph()
     
     def _build_graph(self) -> StateGraph:
-        """Build the LangGraph workflow"""
+        """Build the LangGraph workflow with LLM integration"""
         graph = StateGraph(ChatbotState)
         
-        # Add nodes
-        graph.add_node("classify_intent", self._classify_intent)
-        graph.add_node("extract_info", self._extract_info)
-        graph.add_node("collect_missing_info", self._collect_missing_info)
+        # Add nodes - now using LLMs
+        graph.add_node("extract_info_with_llm", self._extract_info_with_llm)
+        graph.add_node("ask_followup_with_llm", self._ask_followup_with_llm)
         graph.add_node("search_documents", self._search_documents)
-        graph.add_node("generate_response", self._generate_response)
-        graph.add_node("ask_followup", self._ask_followup)
+        graph.add_node("generate_response_with_llm", self._generate_response_with_llm)
         
         # Define edges
-        graph.add_edge("classify_intent", "extract_info")
-        
-        # Conditional edges
         graph.add_conditional_edges(
-            "extract_info",
+            "extract_info_with_llm",
             self._should_collect_info,
             {
-                "collect_info": "collect_missing_info",
-                "search_docs": "search_documents",
-                "ask_followup": "ask_followup"
+                "collect_info": "ask_followup_with_llm",
+                "search_docs": "search_documents"
             }
         )
         
-        graph.add_edge("collect_missing_info", "ask_followup")
-        graph.add_edge("search_documents", "generate_response")
-        graph.add_edge("ask_followup", END)
-        graph.add_edge("generate_response", END)
+        graph.add_edge("ask_followup_with_llm", END)
+        graph.add_edge("search_documents", "generate_response_with_llm")
+        graph.add_edge("generate_response_with_llm", END)
         
         # Set entry point
-        graph.set_entry_point("classify_intent")
+        graph.set_entry_point("extract_info_with_llm")
         
         return graph.compile()
     
-    def _classify_intent(self, state: ChatbotState) -> ChatbotState:
-        """Classify user intent and initialize conversation"""
-        user_message = state["messages"][-1]["content"] if state["messages"] else ""
-        
-        # Simple intent classification
-        insurance_keywords = {
-            "health": ["health", "medical", "doctor", "hospital", "healthcare"],
-            "life": ["life", "death", "beneficiary", "term", "whole"],
-            "auto": ["auto", "car", "vehicle", "driving", "collision"]
-        }
-        
-        detected_type = None
-        for ins_type, keywords in insurance_keywords.items():
-            if any(keyword in user_message.lower() for keyword in keywords):
-                detected_type = ins_type
-                break
-        
-        state["conversation_stage"] = "extracting_info"
-        state["user_query"] = user_message
-        if detected_type:
-            state["insurance_type"] = detected_type
-            
-        return state
-    
-    def _extract_info(self, state: ChatbotState) -> ChatbotState:
-        """Extract age and insurance type from user message"""
+    async def _extract_info_with_llm(self, state: ChatbotState) -> ChatbotState:
+        """Use LLM to extract age and insurance type from user message"""
         user_message = state["user_query"]
         
-        # Extract age using regex
-        age_match = re.search(r'\b(\d{1,2})\b', user_message)
-        if age_match:
-            age = int(age_match.group(1))
-            if 18 <= age <= 100:  # Reasonable age range
-                state["user_age"] = age
+        # LLM Prompt for information extraction
+        extraction_prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content="""You are an information extraction assistant. 
+            Extract the user's age and insurance type from their message.
+            
+            Return ONLY a JSON object with this format:
+            {"age": number_or_null, "insurance_type": "health/life/auto_or_null"}
+            
+            Examples:
+            - "I'm 25 and need health insurance" -> {"age": 25, "insurance_type": "health"}
+            - "Looking for car insurance" -> {"age": null, "insurance_type": "auto"}
+            - "I need insurance" -> {"age": null, "insurance_type": null}"""),
+            HumanMessage(content=f"Extract from: {user_message}")
+        ])
         
-        # Extract insurance type if not already detected
-        if not state.get("insurance_type"):
-            insurance_types = ["health", "life", "auto"]
-            for ins_type in insurance_types:
-                if ins_type in user_message.lower():
-                    state["insurance_type"] = ins_type
-                    break
+        # Get LLM response
+        llm_response = await self.llm.ainvoke(extraction_prompt.format_messages())
+        
+        try:
+            # Parse JSON response
+            extracted_data = json.loads(llm_response.content)
+            
+            if extracted_data.get("age"):
+                state["user_age"] = extracted_data["age"]
+            if extracted_data.get("insurance_type"):
+                state["insurance_type"] = extracted_data["insurance_type"]
+                
+        except json.JSONDecodeError:
+            # Fallback to regex if LLM fails
+            age_match = re.search(r'\b(\d{1,2})\b', user_message)
+            if age_match and 18 <= int(age_match.group(1)) <= 100:
+                state["user_age"] = int(age_match.group(1))
         
         return state
     
@@ -187,37 +132,50 @@ class InsuranceChatbot:
         else:
             return "search_docs"
     
-    def _collect_missing_info(self, state: ChatbotState) -> ChatbotState:
-        """Identify what information is missing"""
-        state["conversation_stage"] = "collecting_info"
-        return state
-    
-    def _ask_followup(self, state: ChatbotState) -> ChatbotState:
-        """Generate follow-up questions for missing information"""
+    async def _ask_followup_with_llm(self, state: ChatbotState) -> ChatbotState:
+        """Use LLM to generate natural follow-up questions"""
         missing_info = state.get("missing_info", [])
+        conversation_history = state.get("messages", [])
         
-        if "age" in missing_info and "insurance_type" in missing_info:
-            response = "Hi! I'd be happy to help you find insurance options. Could you please tell me:\n1. Your age\n2. What type of insurance you're looking for (health, life, or auto)?"
-        elif "age" in missing_info:
-            response = "To provide you with the most accurate insurance information, could you please share your age?"
-        elif "insurance_type" in missing_info:
-            response = "What type of insurance are you interested in? I can help with:\n- Health insurance\n- Life insurance\n- Auto insurance"
-        else:
-            response = "I have all the information I need. Let me search for insurance options for you."
+        # Create context for LLM
+        history_text = "\n".join([
+            f"{msg['role']}: {msg['content']}" 
+            for msg in conversation_history[-3:]  # Last 3 messages
+        ])
+        
+        # LLM Prompt for generating follow-up questions
+        followup_prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content="""You are a friendly insurance assistant. 
+            Generate natural follow-up questions to collect missing information.
+            
+            Be conversational, helpful, and specific. Don't be robotic.
+            
+            Available insurance types: health, life, auto insurance"""),
+            HumanMessage(content=f"""
+            Conversation so far:
+            {history_text}
+            
+            Missing information: {', '.join(missing_info)}
+            
+            Generate a helpful follow-up question to collect the missing information.
+            """)
+        ])
+        
+        # Get LLM response
+        llm_response = await self.llm.ainvoke(followup_prompt.format_messages())
+        response = llm_response.content
         
         state["last_response"] = response
         state["messages"].append({"role": "assistant", "content": response})
         return state
     
     def _search_documents(self, state: ChatbotState) -> ChatbotState:
-        """Search insurance documents based on age and type"""
+        """Search insurance documents (same as before - no LLM needed here)"""
         age = state["user_age"]
         insurance_type = state["insurance_type"]
         
-        # Determine age bracket
         age_bracket = self._get_age_bracket(age, insurance_type)
         
-        # Search in database
         relevant_docs = []
         if insurance_type in INSURANCE_DATABASE and age_bracket in INSURANCE_DATABASE[insurance_type]:
             doc = INSURANCE_DATABASE[insurance_type][age_bracket]
@@ -228,66 +186,69 @@ class InsuranceChatbot:
             })
         
         state["relevant_docs"] = relevant_docs
-        state["conversation_stage"] = "searching_complete"
         return state
     
-    def _get_age_bracket(self, age: int, insurance_type: str) -> str:
-        """Determine age bracket based on insurance type"""
-        if insurance_type == "health":
-            if 18 <= age <= 25:
-                return "18-25"
-            elif 26 <= age <= 35:
-                return "26-35"
-            elif 36 <= age <= 50:
-                return "36-50"
-            elif 51 <= age <= 65:
-                return "51-65"
-        elif insurance_type == "life":
-            if 18 <= age <= 30:
-                return "18-30"
-            elif 31 <= age <= 45:
-                return "31-45"
-            elif 46 <= age <= 60:
-                return "46-60"
-        elif insurance_type == "auto":
-            if 18 <= age <= 25:
-                return "18-25"
-            elif 26 <= age <= 40:
-                return "26-40"
-            elif 41 <= age <= 65:
-                return "41-65"
-        
-        return "general"  # fallback
-    
-    def _generate_response(self, state: ChatbotState) -> ChatbotState:
-        """Generate final response with insurance information"""
+    async def _generate_response_with_llm(self, state: ChatbotState) -> ChatbotState:
+        """Use LLM to generate final response with insurance information"""
         relevant_docs = state["relevant_docs"]
+        user_age = state["user_age"]
+        insurance_type = state["insurance_type"]
         
         if not relevant_docs:
-            response = f"I couldn't find specific insurance options for a {state['user_age']}-year-old looking for {state['insurance_type']} insurance. Please contact our support team for personalized assistance."
+            # LLM generates "no results" response
+            no_results_prompt = ChatPromptTemplate.from_messages([
+                SystemMessage(content="You are a helpful insurance assistant. Generate a polite response when no insurance options are found."),
+                HumanMessage(content=f"No insurance options found for {insurance_type} insurance for age {user_age}. Suggest contacting support.")
+            ])
+            llm_response = await self.llm.ainvoke(no_results_prompt.format_messages())
+            response = llm_response.content
         else:
-            doc = relevant_docs[0]
-            data = doc["data"]
-            insurance_type = doc["insurance_type"].title()
+            # LLM generates response with insurance data
+            doc_data = relevant_docs[0]["data"]
             
-            response = f"Great! Here are {insurance_type} insurance options for age {state['user_age']}:\n\n"
-            response += f"💰 **Premium**: {data.get('premium', 'Contact for quote')}\n"
-            response += f"🏥 **Coverage**: {data.get('coverage', 'Standard coverage')}\n"
+            insurance_info = f"""
+            Insurance Type: {insurance_type.title()}
+            Age: {user_age}
+            Premium: {doc_data.get('premium', 'Contact for quote')}
+            Coverage: {doc_data.get('coverage', 'Standard coverage')}
+            Deductible: {doc_data.get('deductible', 'N/A')}
+            """
             
-            if 'deductible' in data:
-                response += f"💳 **Deductible**: {data['deductible']}\n"
+            response_prompt = ChatPromptTemplate.from_messages([
+                SystemMessage(content="""You are a helpful insurance assistant. 
+                Present insurance information in a friendly, well-formatted way using emojis and clear structure.
+                Be enthusiastic but professional."""),
+                HumanMessage(content=f"""
+                Present this insurance information to the user:
+                {insurance_info}
+                
+                Make it engaging and ask if they want more details.
+                """)
+            ])
             
-            if 'benefits' in data:
-                response += f"\n✅ **Key Benefits**:\n"
-                for benefit in data['benefits']:
-                    response += f"   • {benefit}\n"
-            
-            response += f"\nWould you like more details about any specific aspect of this {insurance_type.lower()} insurance plan?"
+            llm_response = await self.llm.ainvoke(response_prompt.format_messages())
+            response = llm_response.content
         
         state["last_response"] = response
         state["messages"].append({"role": "assistant", "content": response})
-        state["conversation_stage"] = "complete"
         return state
+    
+    def _get_age_bracket(self, age: int, insurance_type: str) -> str:
+        """Same age bracket logic as before"""
+        if insurance_type == "health":
+            if 18 <= age <= 25: return "18-25"
+            elif 26 <= age <= 35: return "26-35"
+            elif 36 <= age <= 50: return "36-50"
+            elif 51 <= age <= 65: return "51-65"
+        elif insurance_type == "life":
+            if 18 <= age <= 30: return "18-30"
+            elif 31 <= age <= 45: return "31-45"
+            elif 46 <= age <= 60: return "46-60"
+        elif insurance_type == "auto":
+            if 18 <= age <= 25: return "18-25"
+            elif 26 <= age <= 40: return "26-40"
+            elif 41 <= age <= 65: return "41-65"
+        return "general"
     
     async def chat(self, user_input: str, state: Optional[ChatbotState] = None) -> tuple[str, ChatbotState]:
         """Main chat interface"""
@@ -303,7 +264,6 @@ class InsuranceChatbot:
                 last_response=""
             )
         
-        # Add user message to state
         state["messages"].append({"role": "user", "content": user_input})
         state["user_query"] = user_input
         
@@ -312,20 +272,17 @@ class InsuranceChatbot:
         
         return result["last_response"], result
 
-# Usage example and testing
+# Usage Example
 async def main():
-    """Example usage of the insurance chatbot"""
-    chatbot = InsuranceChatbot()
+    # You'll need to provide your OpenAI API key
+    chatbot = InsuranceChatbotWithLLM(llm_api_key="your-api-key-here")
+    
     state = None
-    
-    print("Insurance Chatbot Started! Type 'quit' to exit.\n")
-    
-    # Simulate conversation
     test_messages = [
-        "Hi, I need health insurance",
+        "Hi, I need some insurance help",
         "I'm 28 years old",
-        "Can you tell me more about the deductible?",
-        "What about life insurance for someone my age?"
+        "I need health insurance",
+        "Tell me more about the coverage"
     ]
     
     for message in test_messages:
@@ -334,37 +291,5 @@ async def main():
         print(f"Bot: {response}\n")
         print("-" * 50)
 
-# Interactive chat function
-async def interactive_chat():
-    """Interactive chat session"""
-    chatbot = InsuranceChatbot()
-    state = None
-    
-    print("🏥 Insurance Chatbot Started! Type 'quit' to exit.\n")
-    
-    while True:
-        user_input = input("You: ").strip()
-        
-        if user_input.lower() in ['quit', 'exit', 'bye']:
-            print("Bot: Thank you for using our insurance chatbot. Have a great day!")
-            break
-        
-        if not user_input:
-            continue
-        
-        try:
-            response, state = await chatbot.chat(user_input, state)
-            print(f"Bot: {response}\n")
-        except Exception as e:
-            print(f"Bot: Sorry, I encountered an error: {str(e)}")
-            print("Bot: Please try rephrasing your question.\n")
-
 if __name__ == "__main__":
-    # Run the example
-    print("Running example conversation...")
     asyncio.run(main())
-    
-    print("\n" + "="*60)
-    print("Starting interactive chat...")
-    # Uncomment the line below for interactive mode
-    # asyncio.run(interactive_chat())
